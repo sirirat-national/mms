@@ -1,0 +1,128 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function uid() {
+      return request.auth.uid;
+    }
+
+    function userDoc() {
+      return get(/databases/$(database)/documents/users/$(uid())).data;
+    }
+
+    function isActiveUser() {
+      return signedIn() && userDoc().isActive == true;
+    }
+
+    function isAdmin() {
+      return isActiveUser() && userDoc().role == 'admin';
+    }
+
+    function isOrganizer() {
+      return isActiveUser() && userDoc().role == 'organizer';
+    }
+
+    match /users/{userId} {
+      allow read: if isActiveUser();
+
+      // A public registration can only ever create its own participant profile.
+      // Admin and organizer accounts must be created by an existing admin.
+      allow create: if isAdmin()
+        || (signedIn()
+          && userId == uid()
+          && request.auth.token.email == request.resource.data.email
+          && request.resource.data.role == 'participant'
+          && request.resource.data.isActive == true
+          && request.resource.data.keys().hasAll([
+            'email', 'displayName', 'role', 'createdAt', 'isActive'
+          ]));
+
+      // Users may edit their personal details, but can never grant roles or
+      // reactivate a disabled account.
+      allow update: if isAdmin()
+        || (isActiveUser()
+          && userId == uid()
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['displayName', 'department', 'phone', 'lastLoginAt']));
+
+      allow delete: if isAdmin() && userId != uid();
+    }
+
+    match /meetings/{meetingId} {
+      allow read: if isActiveUser();
+
+      allow create: if isAdmin()
+        || (isActiveUser()
+          && request.resource.data.keys().hasAll([
+            'title', 'startAt', 'endAt', 'status', 'organizerId'
+          ])
+          && request.resource.data.organizerId == uid());
+
+      // ผู้สร้างการประชุมแก้ไขหรือลบการประชุมของตนได้ โดยเปลี่ยนผู้จัดไม่ได้
+      // ยกเว้นผู้ดูแลระบบ
+      allow update: if isAdmin()
+        || (isActiveUser()
+          && resource.data.organizerId == uid()
+          && request.resource.data.organizerId == resource.data.organizerId);
+
+      allow delete: if isAdmin()
+        || (isActiveUser() && resource.data.organizerId == uid());
+    }
+
+    match /minutes/{minuteId} {
+      allow read: if isActiveUser();
+
+      allow create: if isAdmin()
+        || (isOrganizer() && request.resource.data.recordedBy == uid());
+
+      allow update: if isAdmin()
+        || (isOrganizer()
+          && resource.data.recordedBy == uid()
+          && request.resource.data.recordedBy == resource.data.recordedBy);
+
+      allow delete: if isAdmin()
+        || (isOrganizer() && resource.data.recordedBy == uid());
+    }
+
+    match /documents/{documentId} {
+      allow read: if isActiveUser();
+
+      allow create: if isAdmin()
+        || (isActiveUser() && request.resource.data.uploadedBy == uid());
+
+      allow update: if isAdmin()
+        || (isActiveUser()
+          && resource.data.uploadedBy == uid()
+          && request.resource.data.uploadedBy == resource.data.uploadedBy);
+
+      allow delete: if isAdmin()
+        || (isActiveUser() && resource.data.uploadedBy == uid());
+    }
+
+    match /notifications/{notificationId} {
+      allow read: if isAdmin()
+        || (isActiveUser() && resource.data.userId == uid());
+
+      // ผู้ใช้ที่ล็อกอินสามารถสร้างการแจ้งเตือนในแอปจากการนัดหมายของตนได้
+      // โดยระบุผู้สร้างให้ตรวจสอบย้อนหลังได้
+      allow create: if isAdmin()
+        || (isActiveUser()
+          && request.resource.data.createdBy == uid()
+          && request.resource.data.keys().hasAll([
+            'userId', 'type', 'title', 'message', 'read', 'createdAt', 'createdBy'
+          ]));
+      allow delete: if isAdmin();
+
+      // Recipients can only change the read flag on their own notifications.
+      allow update: if isAdmin()
+        || (isActiveUser()
+          && resource.data.userId == uid()
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['read']));
+    }
+  }
+}

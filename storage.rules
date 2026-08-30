@@ -1,0 +1,3 @@
+# (ไม่ใช้แล้ว)
+# โปรเจกต์นี้เก็บไฟล์ด้วย Vercel Blob แทน Firebase Storage
+# ไม่จำเป็นต้องตั้งค่า Storage Rules ใน Firebase
