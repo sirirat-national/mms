@@ -65,7 +65,10 @@ export default function MeetingDetailPage() {
   }, [params.id, router]);
 
   useEffect(() => {
-    load().finally(() => setLoading(false));
+    const timeoutId = window.setTimeout(() => {
+      void load().finally(() => setLoading(false));
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
   }, [load]);
 
   if (loading || !meeting) {
@@ -77,6 +80,15 @@ export default function MeetingDetailPage() {
   }
 
   const room = getMeetingRoom(meeting.roomId);
+  const onlineParticipantIds =
+    meeting.onlineParticipantIds ??
+    (meeting.type !== "onsite" ? meeting.participantIds : []);
+  const onlineParticipants = participants.filter((participant) =>
+    onlineParticipantIds.includes(participant.id)
+  );
+  const onsiteParticipants = participants.filter(
+    (participant) => !onlineParticipantIds.includes(participant.id)
+  );
 
   const handleDelete = async () => {
     if (!confirm(`ลบการประชุม "${meeting.title}" หรือไม่?`)) return;
@@ -278,23 +290,57 @@ export default function MeetingDetailPage() {
               ผู้เข้าร่วม ({participants.length})
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-2 !pt-0">
-            {participants.map((p) => (
-              <div
-                key={p.id}
-                className="flex items-center gap-3 rounded-lg border border-slate-100 p-2.5 dark:border-slate-800"
-              >
-                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-100 text-sm font-bold text-brand-700">
-                  {p.displayName.charAt(0)}
+          <CardContent className="space-y-4 !pt-0">
+            {[
+              {
+                title: "เข้าร่วม Online",
+                items: onlineParticipants,
+                color: "blue" as const,
+              },
+              {
+                title: "เข้าร่วม On-site",
+                items: onsiteParticipants,
+                color: "green" as const,
+              },
+            ]
+              .filter((group) => group.items.length > 0)
+              .map((group) => (
+                <div key={group.title}>
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <p className="text-xs font-semibold text-slate-600 dark:text-slate-300">
+                      {group.title}
+                    </p>
+                    <Badge variant={group.color}>
+                      {group.items.length} คน
+                    </Badge>
+                  </div>
+                  <ol className="space-y-2">
+                    {group.items.map((participant, index) => (
+                      <li
+                        key={participant.id}
+                        className="flex items-center gap-3 rounded-lg border border-slate-100 p-2.5 dark:border-slate-800"
+                      >
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-100 text-xs font-bold text-brand-700">
+                          {index + 1}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium">
+                            {participant.displayName}
+                          </p>
+                          <p className="truncate text-xs text-slate-500">
+                            {roleLabels[participant.role]}
+                          </p>
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
                 </div>
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium">{p.displayName}</p>
-                  <p className="truncate text-xs text-slate-500">
-                    {roleLabels[p.role]}
-                  </p>
-                </div>
-              </div>
-            ))}
+              ))}
+            {participants.length === 0 && (
+              <p className="py-4 text-center text-sm text-slate-400">
+                ยังไม่มีผู้เข้าร่วม
+              </p>
+            )}
           </CardContent>
         </Card>
       </div>

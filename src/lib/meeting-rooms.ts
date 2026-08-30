@@ -51,7 +51,7 @@ export const MEETING_ROOMS: MeetingRoom[] = [
   },
 ];
 
-export const ONLINE_PARTICIPANT_LIMIT = 100;
+export const ONLINE_PARTICIPANT_LIMIT = 10;
 
 export function getMeetingRoom(roomId?: string) {
   const legacyRoomIds: Record<string, string> = {

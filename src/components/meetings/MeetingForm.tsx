@@ -72,6 +72,9 @@ export function MeetingForm({
     onlineLink: meeting?.onlineLink ?? "",
     platform: meeting?.platform ?? "google-meet",
     participantIds: meeting?.participantIds ?? [],
+    onlineParticipantIds:
+      meeting?.onlineParticipantIds ??
+      (meeting && meeting.type !== "onsite" ? meeting.participantIds : []),
     reminderMinutes: String(meeting?.reminderMinutes?.[0] ?? 15),
   });
   const [docs, setDocs] = useState<PendingDocument[]>([]);
@@ -89,6 +92,20 @@ export function MeetingForm({
     setForm((f) => ({ ...f, [key]: value }));
 
   const visibleRooms = getRoomsForMeetingType(form.type);
+  const selectedParticipants = users.filter((item) =>
+    form.participantIds.includes(item.id)
+  );
+  const onlineParticipantIds =
+    form.type === "online"
+      ? form.participantIds
+      : form.type === "onsite"
+        ? []
+        : form.onlineParticipantIds.filter((id) =>
+            form.participantIds.includes(id)
+          );
+  const onsiteParticipantIds = form.participantIds.filter(
+    (id) => !onlineParticipantIds.includes(id)
+  );
   const selectedStart = new Date(form.startAt).getTime();
   const selectedEnd = new Date(form.endAt).getTime();
   const hasValidTime =
@@ -131,10 +148,7 @@ export function MeetingForm({
         throw new Error("กรุณาระบุวันและเวลาสิ้นสุดให้หลังเวลาเริ่ม");
       }
 
-      if (
-        form.type !== "onsite" &&
-        form.participantIds.length + 1 > ONLINE_PARTICIPANT_LIMIT
-      ) {
+      if (onlineParticipantIds.length > ONLINE_PARTICIPANT_LIMIT) {
         throw new Error(
           `การประชุมออนไลน์รองรับผู้เข้าร่วมได้ไม่เกิน ${ONLINE_PARTICIPANT_LIMIT} คน`
         );
@@ -145,7 +159,11 @@ export function MeetingForm({
         throw new Error("กรุณาเลือกห้องประชุม");
       }
 
-      if (form.participantIds.length + 1 > room.capacity) {
+      const attendeeCountInRoom =
+        form.type === "hybrid"
+          ? onsiteParticipantIds.length + 1
+          : form.participantIds.length + 1;
+      if (attendeeCountInRoom > room.capacity) {
         throw new Error(
           `ห้อง "${room.name}" รองรับได้ไม่เกิน ${room.capacity} คน`
         );
@@ -189,6 +207,8 @@ export function MeetingForm({
         organizerId: meeting?.organizerId ?? user.id,
         organizerName: meeting?.organizerName ?? user.displayName,
         participantIds: form.participantIds,
+        onlineParticipantIds,
+        onsiteParticipantIds,
         participantEmails: participants.map((p) => p.email),
         reminderMinutes: [reminder],
         createdAt: meeting?.createdAt ?? new Date().toISOString(),
@@ -277,6 +297,10 @@ export function MeetingForm({
                   ...current,
                   type: e.target.value as MeetingType,
                   roomId: "",
+                  onlineParticipantIds:
+                    e.target.value === "online"
+                      ? current.participantIds
+                      : [],
                 }))
               }
               options={[
@@ -461,7 +485,7 @@ export function MeetingForm({
           />
           {form.type !== "onsite" && (
             <p className="text-xs text-slate-500">
-              การประชุมออนไลน์รองรับผู้เข้าร่วมรวมผู้จัดได้ไม่เกิน {ONLINE_PARTICIPANT_LIMIT} คน
+              ผู้เข้าร่วมออนไลน์ต้องมีไม่เกิน {ONLINE_PARTICIPANT_LIMIT} คน
             </p>
           )}
         </CardContent>
@@ -473,8 +497,171 @@ export function MeetingForm({
             users={users}
             selectedIds={form.participantIds}
             excludeIds={user ? [user.id] : []}
-            onChange={(ids) => set("participantIds", ids)}
+            onChange={(ids) => {
+              if (
+                form.type === "online" &&
+                ids.length > ONLINE_PARTICIPANT_LIMIT
+              ) {
+                toast.error(
+                  `ผู้เข้าร่วมออนไลน์ต้องมีไม่เกิน ${ONLINE_PARTICIPANT_LIMIT} คน`
+                );
+                return;
+              }
+              setForm((current) => ({
+                ...current,
+                participantIds: ids,
+                onlineParticipantIds:
+                  current.type === "online"
+                    ? ids
+                    : current.type === "onsite"
+                      ? []
+                      : current.onlineParticipantIds.filter((id) =>
+                          ids.includes(id)
+                        ),
+              }));
+            }}
           />
+
+          {selectedParticipants.length > 0 && (
+            <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-700 dark:bg-slate-900/50">
+              {form.type === "hybrid" ? (
+                <>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900 dark:text-white">
+                        รูปแบบการเข้าร่วม
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        ระบุว่าแต่ละคนเข้าร่วม Online หรือ On-site
+                      </p>
+                    </div>
+                    <span
+                      className={cn(
+                        "rounded-full px-2.5 py-1 text-xs font-semibold",
+                        onlineParticipantIds.length >= ONLINE_PARTICIPANT_LIMIT
+                          ? "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
+                          : "bg-brand-100 text-brand-700 dark:bg-brand-900/40 dark:text-brand-300"
+                      )}
+                    >
+                      Online {onlineParticipantIds.length}/{ONLINE_PARTICIPANT_LIMIT} คน
+                    </span>
+                  </div>
+
+                  <div className="mt-3 space-y-2">
+                    {selectedParticipants.map((participant, index) => {
+                      const isOnline = onlineParticipantIds.includes(
+                        participant.id
+                      );
+                      return (
+                        <div
+                          key={participant.id}
+                          className="flex flex-col gap-2 rounded-lg border border-slate-200 bg-white p-3 sm:flex-row sm:items-center dark:border-slate-700 dark:bg-slate-900"
+                        >
+                          <div className="flex min-w-0 flex-1 items-center gap-2">
+                            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                              {index + 1}
+                            </span>
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-medium text-slate-900 dark:text-white">
+                                {participant.displayName}
+                              </p>
+                              <p className="truncate text-xs text-slate-500">
+                                {participant.email}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-1 rounded-lg bg-slate-100 p-1 dark:bg-slate-800">
+                            <button
+                              type="button"
+                              disabled={
+                                !isOnline &&
+                                onlineParticipantIds.length >=
+                                  ONLINE_PARTICIPANT_LIMIT
+                              }
+                              onClick={() =>
+                                setForm((current) => ({
+                                  ...current,
+                                  onlineParticipantIds: Array.from(
+                                    new Set([
+                                      ...current.onlineParticipantIds,
+                                      participant.id,
+                                    ])
+                                  ),
+                                }))
+                              }
+                              className={cn(
+                                "rounded-md px-3 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40",
+                                isOnline
+                                  ? "bg-brand-600 text-white"
+                                  : "text-slate-600 hover:bg-white dark:text-slate-300 dark:hover:bg-slate-700"
+                              )}
+                            >
+                              Online
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setForm((current) => ({
+                                  ...current,
+                                  onlineParticipantIds:
+                                    current.onlineParticipantIds.filter(
+                                      (id) => id !== participant.id
+                                    ),
+                                }))
+                              }
+                              className={cn(
+                                "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+                                !isOnline
+                                  ? "bg-emerald-600 text-white"
+                                  : "text-slate-600 hover:bg-white dark:text-slate-300 dark:hover:bg-slate-700"
+                              )}
+                            >
+                              On-site
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm font-semibold text-slate-900 dark:text-white">
+                      {form.type === "online"
+                        ? "รายชื่อผู้เข้าร่วมออนไลน์"
+                        : "รายชื่อผู้เข้าร่วม On-site"}
+                    </p>
+                    <span className="rounded-full bg-brand-100 px-2.5 py-1 text-xs font-semibold text-brand-700 dark:bg-brand-900/40 dark:text-brand-300">
+                      {form.type === "online"
+                        ? `${onlineParticipantIds.length}/${ONLINE_PARTICIPANT_LIMIT}`
+                        : onsiteParticipantIds.length} คน
+                    </span>
+                  </div>
+                  <ol className="mt-3 grid gap-2 sm:grid-cols-2">
+                    {selectedParticipants.map((participant, index) => (
+                      <li
+                        key={participant.id}
+                        className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white p-2.5 dark:border-slate-700 dark:bg-slate-900"
+                      >
+                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-100 text-xs font-semibold text-brand-700 dark:bg-brand-900/40 dark:text-brand-300">
+                          {index + 1}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-slate-900 dark:text-white">
+                            {participant.displayName}
+                          </p>
+                          <p className="truncate text-xs text-slate-500">
+                            {participant.email}
+                          </p>
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
+                </>
+              )}
+            </div>
+          )}
           {user && (
             <DocumentUploader
               files={docs}
