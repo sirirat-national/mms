@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { store } from "@/lib/store";
 import { useAuth } from "@/contexts/AuthContext";
+import { getMeetingRoom } from "@/lib/meeting-rooms";
 import {
   markMeetingOngoing,
   resolveMeetingStatus,
@@ -74,6 +75,8 @@ export default function MeetingDetailPage() {
       </div>
     );
   }
+
+  const room = getMeetingRoom(meeting.roomId);
 
   const handleDelete = async () => {
     if (!confirm(`ลบการประชุม "${meeting.title}" หรือไม่?`)) return;
@@ -172,9 +175,26 @@ export default function MeetingDetailPage() {
                 {meeting.location && (
                   <div className="flex gap-3 rounded-xl bg-slate-50 p-4 dark:bg-slate-800/50">
                     <MapPin className="h-5 w-5 text-brand-600" />
-                    <div>
+                    <div className="min-w-0">
                       <p className="text-xs text-slate-500">สถานที่</p>
                       <p className="text-sm font-medium">{meeting.location}</p>
+                      {room && (
+                        <>
+                          <p className="mt-1 flex items-center gap-1 text-xs text-slate-500">
+                            <Users className="h-3.5 w-3.5" /> รองรับ {room.capacity} คน · {room.category === "online" ? "Online" : "On-site"}
+                          </p>
+                          <div className="mt-2 flex flex-wrap gap-1">
+                            {room.equipment.map((item) => (
+                              <span
+                                key={item}
+                                className="rounded bg-white px-1.5 py-0.5 text-[10px] text-slate-600 dark:bg-slate-900 dark:text-slate-300"
+                              >
+                                {item}
+                              </span>
+                            ))}
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
                 )}

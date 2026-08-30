@@ -15,15 +15,17 @@ import { store } from "@/lib/store";
 import { REMINDER_OPTIONS } from "@/lib/meeting-status";
 import {
   getMeetingRoom,
+  getRoomsForMeetingType,
   MEETING_ROOMS,
   ONLINE_PARTICIPANT_LIMIT,
 } from "@/lib/meeting-rooms";
-import { generateId } from "@/lib/utils";
+import { cn, formatDateTime, generateId } from "@/lib/utils";
 import { uploadFileToStorage } from "@/lib/upload";
 import type { Meeting, MeetingType, MeetingStatus, AppUser } from "@/types";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
+import { CheckCircle2, MapPin, Monitor, Users, XCircle } from "lucide-react";
 
 function toLocalInput(iso?: string) {
   if (!iso) return "";
@@ -31,6 +33,13 @@ function toLocalInput(iso?: string) {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
+
+const defaultStartAt = toLocalInput(
+  new Date(Date.now() + 86400000).toISOString()
+);
+const defaultEndAt = toLocalInput(
+  new Date(Date.now() + 90000000).toISOString()
+);
 
 export function MeetingForm({
   meeting,
@@ -42,6 +51,7 @@ export function MeetingForm({
   const { user } = useAuth();
   const router = useRouter();
   const [users, setUsers] = useState<AppUser[]>([]);
+  const [meetings, setMeetings] = useState<Meeting[]>([]);
 
   const [form, setForm] = useState({
     title: meeting?.title ?? "",
@@ -50,12 +60,12 @@ export function MeetingForm({
     status: (meeting?.status ?? "scheduled") as MeetingStatus,
     startAt:
       toLocalInput(meeting?.startAt) ||
-      toLocalInput(new Date(Date.now() + 86400000).toISOString()),
+      defaultStartAt,
     endAt:
       toLocalInput(meeting?.endAt) ||
-      toLocalInput(new Date(Date.now() + 90000000).toISOString()),
+      defaultEndAt,
     roomId:
-      meeting?.roomId ??
+      getMeetingRoom(meeting?.roomId)?.id ??
       MEETING_ROOMS.find((room) => room.name === meeting?.location)?.id ??
       "",
     location: meeting?.location ?? "",
@@ -69,6 +79,7 @@ export function MeetingForm({
 
   useEffect(() => {
     store.getUsers().then(setUsers);
+    store.getMeetings().then(setMeetings);
     if (meeting) {
       store.getDocumentsByMeeting(meeting.id).then(setDocs);
     }
@@ -76,6 +87,32 @@ export function MeetingForm({
 
   const set = (key: string, value: string | string[]) =>
     setForm((f) => ({ ...f, [key]: value }));
+
+  const visibleRooms = getRoomsForMeetingType(form.type);
+  const selectedStart = new Date(form.startAt).getTime();
+  const selectedEnd = new Date(form.endAt).getTime();
+  const hasValidTime =
+    Number.isFinite(selectedStart) &&
+    Number.isFinite(selectedEnd) &&
+    selectedStart < selectedEnd;
+
+  const findRoomConflict = (roomId: string) =>
+    meetings.find((item) => {
+      const itemRoom = getMeetingRoom(item.roomId);
+      const sameRoom =
+        itemRoom?.id === roomId ||
+        (!item.roomId && getMeetingRoom(roomId)?.name === item.location);
+      const overlaps =
+        hasValidTime &&
+        selectedStart < new Date(item.endAt).getTime() &&
+        selectedEnd > new Date(item.startAt).getTime();
+      return (
+        item.id !== meeting?.id &&
+        item.status !== "cancelled" &&
+        sameRoom &&
+        overlaps
+      );
+    });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -103,24 +140,35 @@ export function MeetingForm({
         );
       }
 
-      const room = form.type !== "online" ? getMeetingRoom(form.roomId) : undefined;
-      if (form.type !== "online" && !room) {
+      const room = getMeetingRoom(form.roomId);
+      if (!room) {
         throw new Error("กรุณาเลือกห้องประชุม");
       }
 
-      if (room) {
-        const meetings = await store.getMeetings();
-        const isRoomUnavailable = meetings.some((item) => {
-          const sameRoom =
-            item.roomId === room.id || (!item.roomId && item.location === room.name);
-          const overlaps =
-            startAt.getTime() < new Date(item.endAt).getTime() &&
-            endAt.getTime() > new Date(item.startAt).getTime();
-          return item.id !== meetingId && item.status !== "cancelled" && sameRoom && overlaps;
-        });
-        if (isRoomUnavailable) {
-          throw new Error(`ห้อง "${room.name}" ถูกจองในช่วงเวลานี้แล้ว`);
-        }
+      if (form.participantIds.length + 1 > room.capacity) {
+        throw new Error(
+          `ห้อง "${room.name}" รองรับได้ไม่เกิน ${room.capacity} คน`
+        );
+      }
+
+      const latestMeetings = await store.getMeetings();
+      const isRoomUnavailable = latestMeetings.some((item) => {
+        const itemRoom = getMeetingRoom(item.roomId);
+        const sameRoom =
+          itemRoom?.id === room.id ||
+          (!item.roomId && item.location === room.name);
+        const overlaps =
+          startAt.getTime() < new Date(item.endAt).getTime() &&
+          endAt.getTime() > new Date(item.startAt).getTime();
+        return (
+          item.id !== meetingId &&
+          item.status !== "cancelled" &&
+          sameRoom &&
+          overlaps
+        );
+      });
+      if (isRoomUnavailable) {
+        throw new Error(`ห้อง "${room.name}" ถูกจองในช่วงเวลานี้แล้ว`);
       }
 
       const payload: Meeting = {
@@ -224,7 +272,13 @@ export function MeetingForm({
               id="type"
               label="ประเภท"
               value={form.type}
-              onChange={(e) => set("type", e.target.value)}
+              onChange={(e) =>
+                setForm((current) => ({
+                  ...current,
+                  type: e.target.value as MeetingType,
+                  roomId: "",
+                }))
+              }
               options={[
                 { value: "online", label: "ออนไลน์" },
                 { value: "onsite", label: "สถานที่" },
@@ -262,27 +316,119 @@ export function MeetingForm({
               required
             />
           </div>
-          {form.type !== "online" && (
-            <div>
-              <Select
-                id="roomId"
-                label="ห้องประชุม *"
-                value={form.roomId}
-                onChange={(e) => set("roomId", e.target.value)}
-                required
-                options={[
-                  { value: "", label: "เลือกห้องประชุม" },
-                  ...MEETING_ROOMS.map((room) => ({
-                    value: room.id,
-                    label: `${room.name} (รองรับ ${room.capacity} คน)`,
-                  })),
-                ]}
-              />
-              <p className="mt-1.5 text-xs text-slate-500">
-                ระบบตรวจสอบห้องซ้ำในวันและเวลาที่เลือกก่อนบันทึก
-              </p>
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-end justify-between gap-2">
+              <div>
+                <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                  เลือกห้องประชุม *
+                </p>
+                <p className="mt-1 text-xs text-slate-500">
+                  {form.type === "onsite"
+                    ? "ห้อง On-site 3 ห้อง"
+                    : "ห้องที่รองรับการประชุมออนไลน์ 2 ห้อง"}
+                </p>
+              </div>
+              <div className="flex items-center gap-3 text-xs">
+                <span className="flex items-center gap-1 text-emerald-600">
+                  <CheckCircle2 className="h-3.5 w-3.5" /> ว่าง
+                </span>
+                <span className="flex items-center gap-1 text-red-600">
+                  <XCircle className="h-3.5 w-3.5" /> ไม่ว่าง
+                </span>
+              </div>
             </div>
-          )}
+
+            {!hasValidTime && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300">
+                กรุณาเลือกวันและเวลาเริ่ม–สิ้นสุด เพื่อดูสถานะห้องว่าง
+              </div>
+            )}
+
+            <div className="grid gap-3 md:grid-cols-2">
+              {visibleRooms.map((room) => {
+                const conflict = findRoomConflict(room.id);
+                const unavailable = Boolean(conflict);
+                const selected = form.roomId === room.id;
+
+                return (
+                  <button
+                    key={room.id}
+                    type="button"
+                    disabled={unavailable}
+                    aria-pressed={selected}
+                    onClick={() => set("roomId", room.id)}
+                    className={cn(
+                      "rounded-xl border p-4 text-left transition-all",
+                      selected
+                        ? "border-brand-500 bg-brand-50 ring-2 ring-brand-500/20 dark:bg-brand-950/30"
+                        : "border-slate-200 bg-white hover:border-brand-300 dark:border-slate-700 dark:bg-slate-900",
+                      unavailable &&
+                        "cursor-not-allowed border-red-200 bg-red-50/60 opacity-80 dark:border-red-900 dark:bg-red-950/20"
+                    )}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-slate-900 dark:text-white">
+                          {room.name}
+                        </p>
+                        <p className="mt-0.5 text-xs text-slate-500">
+                          {room.description}
+                        </p>
+                      </div>
+                      {unavailable ? (
+                        <span className="shrink-0 rounded-full bg-red-100 px-2 py-1 text-[11px] font-semibold text-red-700 dark:bg-red-900/40 dark:text-red-300">
+                          ไม่ว่าง
+                        </span>
+                      ) : (
+                        <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-1 text-[11px] font-semibold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                          ว่าง
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="mt-3 flex flex-wrap gap-3 text-xs text-slate-500">
+                      <span className="flex items-center gap-1">
+                        <Users className="h-3.5 w-3.5" /> รองรับ {room.capacity} คน
+                      </span>
+                      <span className="flex items-center gap-1">
+                        {room.category === "online" ? (
+                          <Monitor className="h-3.5 w-3.5" />
+                        ) : (
+                          <MapPin className="h-3.5 w-3.5" />
+                        )}
+                        {room.category === "online" ? "Online" : "On-site"}
+                      </span>
+                    </div>
+
+                    <div className="mt-3 flex flex-wrap gap-1.5">
+                      {room.equipment.map((item) => (
+                        <span
+                          key={item}
+                          className="rounded-md bg-slate-100 px-2 py-1 text-[11px] text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+                        >
+                          {item}
+                        </span>
+                      ))}
+                    </div>
+
+                    {conflict && (
+                      <div className="mt-3 rounded-lg bg-white/80 p-2.5 text-xs text-red-700 dark:bg-slate-900/70 dark:text-red-300">
+                        <p className="font-semibold">จองโดย {conflict.organizerName}</p>
+                        <p className="mt-1">{conflict.title}</p>
+                        <p className="mt-1">
+                          {formatDateTime(conflict.startAt)} – {new Date(conflict.endAt).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })} น.
+                        </p>
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            <p className="text-xs text-slate-500">
+              ระบบแสดงผู้จอง วันเวลา และตรวจสอบห้องซ้ำอีกครั้งก่อนบันทึก
+            </p>
+          </div>
           {form.type !== "onsite" && (
             <div className="grid gap-4 sm:grid-cols-2">
               <Select
