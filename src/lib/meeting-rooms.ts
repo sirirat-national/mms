@@ -53,6 +53,21 @@ export const MEETING_ROOMS: MeetingRoom[] = [
 
 export const ONLINE_PARTICIPANT_LIMIT = 10;
 
+export const MEETING_EQUIPMENT_OPTIONS = [
+  "จอแสดงผล",
+  "จอโปรเจกเตอร์",
+  "กล้อง",
+  "ไมโครโฟน",
+  "ลำโพง",
+  "คอมพิวเตอร์",
+  "ไวท์บอร์ด",
+  "สาย HDMI",
+  "อินเทอร์เน็ต",
+  "อื่นๆ",
+] as const;
+
+export const OTHER_EQUIPMENT_OPTION = "อื่นๆ";
+
 export function getMeetingRoom(roomId?: string) {
   const legacyRoomIds: Record<string, string> = {
     "tri-building-floor-2": "auditorium-building-floor-2",

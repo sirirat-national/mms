@@ -6,7 +6,11 @@ import { Button } from "@/components/ui/Button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { store } from "@/lib/store";
 import { useAuth } from "@/contexts/AuthContext";
-import { getMeetingRoom } from "@/lib/meeting-rooms";
+import {
+  getMeetingRoom,
+  ONLINE_PARTICIPANT_LIMIT,
+  OTHER_EQUIPMENT_OPTION,
+} from "@/lib/meeting-rooms";
 import {
   markMeetingOngoing,
   resolveMeetingStatus,
@@ -89,6 +93,12 @@ export default function MeetingDetailPage() {
   const onsiteParticipants = participants.filter(
     (participant) => !onlineParticipantIds.includes(participant.id)
   );
+  const requestedEquipment = [
+    ...(meeting.requestedEquipment ?? []).filter(
+      (item) => item !== OTHER_EQUIPMENT_OPTION
+    ),
+    ...(meeting.otherEquipment ? [meeting.otherEquipment] : []),
+  ];
 
   const handleDelete = async () => {
     if (!confirm(`ลบการประชุม "${meeting.title}" หรือไม่?`)) return;
@@ -193,7 +203,7 @@ export default function MeetingDetailPage() {
                       {room && (
                         <>
                           <p className="mt-1 flex items-center gap-1 text-xs text-slate-500">
-                            <Users className="h-3.5 w-3.5" /> รองรับ {room.capacity} คน · {room.category === "online" ? "Online" : "On-site"}
+                            <Users className="h-3.5 w-3.5" /> ความจุห้อง {room.capacity} คน · {room.category === "online" ? `ออนไลน์สูงสุด ${ONLINE_PARTICIPANT_LIMIT} คน` : "On-site"}
                           </p>
                           <div className="mt-2 flex flex-wrap gap-1">
                             {room.equipment.map((item) => (
@@ -240,6 +250,23 @@ export default function MeetingDetailPage() {
                 <p className="text-sm font-medium">
                   {meeting.reminderMinutes[0] ?? 15} นาที
                 </p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500">อุปกรณ์ที่ขอใช้</p>
+                {requestedEquipment.length > 0 ? (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {requestedEquipment.map((item) => (
+                      <span
+                        key={item}
+                        className="rounded-md bg-brand-50 px-2 py-1 text-xs text-brand-700 dark:bg-brand-950/30 dark:text-brand-300"
+                      >
+                        {item}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm font-medium">ไม่ได้ระบุ</p>
+                )}
               </div>
             </CardContent>
           </Card>

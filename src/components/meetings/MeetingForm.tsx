@@ -16,8 +16,10 @@ import { REMINDER_OPTIONS } from "@/lib/meeting-status";
 import {
   getMeetingRoom,
   getRoomsForMeetingType,
+  MEETING_EQUIPMENT_OPTIONS,
   MEETING_ROOMS,
   ONLINE_PARTICIPANT_LIMIT,
+  OTHER_EQUIPMENT_OPTION,
 } from "@/lib/meeting-rooms";
 import { cn, formatDateTime, generateId } from "@/lib/utils";
 import { uploadFileToStorage } from "@/lib/upload";
@@ -75,6 +77,8 @@ export function MeetingForm({
     onlineParticipantIds:
       meeting?.onlineParticipantIds ??
       (meeting && meeting.type !== "onsite" ? meeting.participantIds : []),
+    requestedEquipment: meeting?.requestedEquipment ?? [],
+    otherEquipment: meeting?.otherEquipment ?? "",
     reminderMinutes: String(meeting?.reminderMinutes?.[0] ?? 15),
   });
   const [docs, setDocs] = useState<PendingDocument[]>([]);
@@ -159,6 +163,13 @@ export function MeetingForm({
         throw new Error("กรุณาเลือกห้องประชุม");
       }
 
+      if (
+        form.requestedEquipment.includes(OTHER_EQUIPMENT_OPTION) &&
+        !form.otherEquipment.trim()
+      ) {
+        throw new Error("กรุณาระบุอุปกรณ์อื่น ๆ ที่ต้องการใช้");
+      }
+
       const attendeeCountInRoom =
         form.type === "hybrid"
           ? onsiteParticipantIds.length + 1
@@ -209,6 +220,12 @@ export function MeetingForm({
         participantIds: form.participantIds,
         onlineParticipantIds,
         onsiteParticipantIds,
+        requestedEquipment: form.requestedEquipment,
+        otherEquipment: form.requestedEquipment.includes(
+          OTHER_EQUIPMENT_OPTION
+        )
+          ? form.otherEquipment.trim()
+          : undefined,
         participantEmails: participants.map((p) => p.email),
         reminderMinutes: [reminder],
         createdAt: meeting?.createdAt ?? new Date().toISOString(),
@@ -412,7 +429,7 @@ export function MeetingForm({
 
                     <div className="mt-3 flex flex-wrap gap-3 text-xs text-slate-500">
                       <span className="flex items-center gap-1">
-                        <Users className="h-3.5 w-3.5" /> รองรับ {room.capacity} คน
+                        <Users className="h-3.5 w-3.5" /> ความจุห้อง {room.capacity} คน
                       </span>
                       <span className="flex items-center gap-1">
                         {room.category === "online" ? (
@@ -422,6 +439,11 @@ export function MeetingForm({
                         )}
                         {room.category === "online" ? "Online" : "On-site"}
                       </span>
+                      {room.category === "online" && (
+                        <span className="font-medium text-brand-600 dark:text-brand-400">
+                          ออนไลน์สูงสุด {ONLINE_PARTICIPANT_LIMIT} คน
+                        </span>
+                      )}
                     </div>
 
                     <div className="mt-3 flex flex-wrap gap-1.5">
@@ -453,6 +475,66 @@ export function MeetingForm({
               ระบบแสดงผู้จอง วันเวลา และตรวจสอบห้องซ้ำอีกครั้งก่อนบันทึก
             </p>
           </div>
+
+          <div className="space-y-3">
+            <div>
+              <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                อุปกรณ์ที่ต้องการใช้
+              </p>
+              <p className="mt-1 text-xs text-slate-500">
+                เลือกได้มากกว่า 1 รายการ รายการนี้จะถูกบันทึกไว้กับการประชุม
+              </p>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {MEETING_EQUIPMENT_OPTIONS.map((item) => {
+                const checked = form.requestedEquipment.includes(item);
+                return (
+                  <label
+                    key={item}
+                    className={cn(
+                      "flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2.5 text-sm transition-colors",
+                      checked
+                        ? "border-brand-500 bg-brand-50 text-brand-700 dark:bg-brand-950/30 dark:text-brand-300"
+                        : "border-slate-200 bg-white text-slate-700 hover:border-brand-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+                    )}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          requestedEquipment: event.target.checked
+                            ? [...current.requestedEquipment, item]
+                            : current.requestedEquipment.filter(
+                                (equipment) => equipment !== item
+                              ),
+                          otherEquipment:
+                            item === OTHER_EQUIPMENT_OPTION &&
+                            !event.target.checked
+                              ? ""
+                              : current.otherEquipment,
+                        }))
+                      }
+                      className="h-4 w-4 rounded border-slate-300 accent-brand-600"
+                    />
+                    <span>{item}</span>
+                  </label>
+                );
+              })}
+            </div>
+            {form.requestedEquipment.includes(OTHER_EQUIPMENT_OPTION) && (
+              <Input
+                id="otherEquipment"
+                label="ระบุอุปกรณ์อื่น ๆ *"
+                value={form.otherEquipment}
+                onChange={(event) => set("otherEquipment", event.target.value)}
+                placeholder="เช่น ปลั๊กพ่วง, ตัวแปลง USB-C หรืออุปกรณ์เฉพาะอื่น ๆ"
+                required
+              />
+            )}
+          </div>
+
           {form.type !== "onsite" && (
             <div className="grid gap-4 sm:grid-cols-2">
               <Select

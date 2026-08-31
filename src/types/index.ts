@@ -33,6 +33,8 @@ export interface Meeting {
   participantIds: string[];
   onlineParticipantIds?: string[];
   onsiteParticipantIds?: string[];
+  requestedEquipment?: string[];
+  otherEquipment?: string;
   participantEmails: string[];
   reminderMinutes: number[];
   createdAt: string;
