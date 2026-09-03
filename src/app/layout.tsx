@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { IBM_Plex_Sans_Thai, Noto_Sans_Thai } from "next/font/google";
 import { Providers } from "@/components/Providers";
+import { SITE_DESCRIPTION, SITE_NAME } from "@/lib/brand";
 import "./globals.css";
 
 const ibmPlex = IBM_Plex_Sans_Thai({
@@ -16,9 +17,8 @@ const notoThai = Noto_Sans_Thai({
 });
 
 export const metadata: Metadata = {
-  title: "MeetCloud — ระบบจัดการประชุมออนไลน์ครบวงจร",
-  description:
-    "Cloud-based All-in-one Online Meeting Management System สำหรับองค์กร",
+  title: SITE_NAME,
+  description: SITE_DESCRIPTION,
 };
 
 export default function RootLayout({

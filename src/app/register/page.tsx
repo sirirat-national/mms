@@ -1,6 +1,7 @@
 "use client";
 
 import { useAuth } from "@/contexts/AuthContext";
+import { SITE_NAME } from "@/lib/brand";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { FileText } from "lucide-react";
@@ -53,8 +54,8 @@ export default function RegisterPage() {
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-600 text-white">
             <FileText className="h-5 w-5" />
           </div>
-          <span className="text-lg font-bold text-slate-900 dark:text-white">
-            MeetCloud
+          <span className="text-sm font-bold leading-snug text-slate-900 dark:text-white">
+            {SITE_NAME}
           </span>
         </div>
         <h1 className="text-2xl font-bold text-slate-900 dark:text-white">

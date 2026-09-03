@@ -2,6 +2,7 @@
 
 import { cn, roleLabels } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
+import { SITE_NAME } from "@/lib/brand";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -65,11 +66,11 @@ export function Sidebar({
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-600 text-white shadow-lg shadow-brand-600/30">
               <FileText className="h-5 w-5" />
             </div>
-            <div>
-              <p className="text-sm font-bold tracking-tight text-slate-900 dark:text-white">
-                MeetCloud
+            <div className="min-w-0">
+              <p className="max-w-48 text-xs font-bold leading-4 tracking-tight text-slate-900 dark:text-white">
+                {SITE_NAME}
               </p>
-              <p className="text-[10px] text-slate-400">Meeting Management</p>
+              <p className="text-[10px] text-slate-400">Meeting Room Management</p>
             </div>
           </Link>
           <button

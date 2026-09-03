@@ -2,6 +2,7 @@
 
 import { useAuth } from "@/contexts/AuthContext";
 import { isFirebaseConfigured } from "@/lib/firebase";
+import { SITE_NAME } from "@/lib/brand";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { FileText, Eye, EyeOff, AlertTriangle } from "lucide-react";
@@ -59,16 +60,17 @@ export default function LoginPage() {
             <FileText className="h-6 w-6" />
           </div>
           <div>
-            <p className="text-lg font-bold text-white">MeetCloud</p>
-            <p className="text-xs text-brand-200">Meeting Management System</p>
+            <p className="max-w-sm text-lg font-bold leading-snug text-white">
+              {SITE_NAME}
+            </p>
+            <p className="text-xs text-brand-200">Meeting Room Management</p>
           </div>
         </div>
         <div className="relative max-w-md">
           <h1 className="text-4xl font-bold leading-tight text-white">
-            ระบบคลาวด์
+            ระบบคลาวด์การจัดการ
             <br />
-            การจัดการประชุมออนไลน์
-            <br />
+            ห้องประชุม
             <span className="text-brand-300">ครบวงจร</span>
           </h1>
           <p className="mt-4 text-brand-100/80">
@@ -77,7 +79,7 @@ export default function LoginPage() {
           </p>
         </div>
         <p className="relative text-xs text-brand-300/60">
-          © {new Date().getFullYear()} MeetCloud. All rights reserved.
+          © {new Date().getFullYear()} {SITE_NAME}
         </p>
       </div>
 
@@ -87,8 +89,8 @@ export default function LoginPage() {
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-600 text-white">
               <FileText className="h-5 w-5" />
             </div>
-            <span className="text-lg font-bold text-slate-900 dark:text-white">
-              MeetCloud
+            <span className="text-sm font-bold leading-snug text-slate-900 dark:text-white">
+              {SITE_NAME}
             </span>
           </div>
 
